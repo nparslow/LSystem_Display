@@ -1,17 +1,27 @@
-#directory "+camlimages";;
-#use "topfind";;
-#require "camlimages.all_formats";;
-#require "camlimages.graphics";;
+
+(*#directory "+camlimages";;
+ #use "topfind";; 
+ #require "camlimages.all_formats";;
+ #require "camlimages.graphics";;*)
+
+(* ocamlfind ocamlc -package camlimages.all_formats -package labltk -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
+
 
 open Arg;;
+open Images;;
+open Graphics;;
 
 let n = ref 0;;
 let grow = ref false;;
+let clear = ref true;;
+let exemple = ref "snow";;
 let arguments = ref[];;
 
 let opt_spec = [
   ("-n", Set_int n, "Il faut préciser un nombre d'itérations n");
   ("-grow", Unit (function () -> grow := not !grow), "Faire agrandir le graphisme");
+  ("-clear", Unit (function () -> clear := not !clear), "Ne pas effacer le dessin à chaque fois");
+  ("-exemple", Set_string exemple, "choisir un exemple")
 ];;
 
 let arg_action = (function s -> arguments:= !arguments @ [s]);;
@@ -71,10 +81,10 @@ let rec taille t = match t with
 
 
 (* Intepretation *)
-#load "graphics.cma"
+(*#load "graphics.cma"*)
 open Graphics;;
 
-#load "unix.cma";;
+(*#load "unix.cma";;*)
 
 let pi = 2.*.(asin 1.);;
 let rad_of_deg d = (2. *. pi *. (float_of_int d) ) /. 360.;;
@@ -210,8 +220,8 @@ exception Quit;;
 
 (* sauvegarde une image graphics de type Graphics.image dans le fichier au format de son choix (.png, .jpg...) *)
 let save_image image file_name =
-  let img = Images.Rgb24 (Graphic_image.image_of image) in
-  Images.save file_name None [] img;;
+  let image = Images.Rgb24 (Graphic_image.image_of image) in
+  Images.save file_name None [] image;;
 
 (* transforme une matrice de triplets (r,g,b) en une "image graphics"
 de type Graphics.image *)
@@ -224,23 +234,25 @@ let to_graphics rgb_matrix =
        rgb_matrix);;
 
 let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear=
-  let event = wait_next_event [Key_pressed]
-  in 
   try
     while true do
+      let event = wait_next_event [Key_pressed]
+      in 
       if event.keypressed
       then
 	match event.key with
 	| 'q' -> raise Quit
 	| 's' -> 
 	  let img =  get_image 0 0 (size_x ()) (size_y ())
-	  in save_image img "picture.bmp"
+	  in  save_image img "picture.bmp"
 	| _ -> begin
 	  (match event.key with
 	    | 'o' ->  set_color (rgb 246 121 25)
 	    | 'r' ->  set_color red
 	    | 'v' ->  set_color green
-	    | 'j' -> set_color yellow);
+	    | 'j' -> set_color yellow
+	    | 'b' -> set_color black
+	    | _ -> ());
 	       
 	  rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
 	  ();
@@ -255,7 +267,7 @@ rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter
   begin
     if clear then clear_graph() else ();
     let minmax_xy = { minx = 0.0 ; maxx = 0.0 ; miny = 0.0 ; maxy = 0.0 } in
-    aux_draw chaine interpretation point_depart minmax_xy 0 ( scale_factor *. (echelle ** (float_of_int tmp))) false;
+    let (_,_,_)= aux_draw chaine interpretation point_depart minmax_xy 0 ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
     (* si il s'agit de la dernière itération *)
     if iter=(k+1) then begin
       reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear (* appeler la réponse à l'utilisateur *)
@@ -293,15 +305,14 @@ let draw chaine rws interpretation iter grow clear =
 ;;
 
 
+(* Les exemples *)
+
 (* snow flake *)
 let w_snow = Seq [S A;S B;S A;S B;S A]
 and s_snow = [A, Seq [S A;S C;S A;S B;S A;S C;S A]]
-and i_snow =
-  [(A,[Line(250)]); (B,[Turn(120)]); (C,[Turn(-60)]); (D,[Turn(60)])];;
+and i_snow = [(A,[Line(250)]); (B,[Turn(120)]); (C,[Turn(-60)]); (D,[Turn(60)])];;
 
-draw w_snow s_snow i_snow 5 false true;;
-
-(* The infamous Dragon curve, the terror of IF1. ABOP page 11 *)
+(* Le Dragon *)
 let w_dragon = Seq [S A]
 and s_dragon = [
   (A, Seq [S A; S C; S B; S C]);
@@ -309,9 +320,7 @@ and s_dragon = [
 ]
 and i_dragon = [(A,[Line(50)]);(B,[Line(50)]);(C,[Turn(90)]);(D,[Turn(-90)])];;
 
-(*draw w_dragon s_dragon i_dragon 15 true true;;*)
-
-
+(* Cantor *)
 let w_cantor = Seq [S D; S A;]
 and s_cantor = [
   (A, Seq [ S A; S B ; S A ] );
@@ -320,14 +329,118 @@ and s_cantor = [
 ]
 and i_cantor = [(A,[Rectangle(50,5)]);(B,[Move(50)]); (C,[Turn(-90);MoveNoScale(10);Turn(+90)]); (D,[])];;
 
-(*draw w_cantor s_cantor i_cantor 5 false false;;*)
+(* quadratic koch island *)
+let w_koch = Seq [S A;S B;S A;S B;S A;S B;S A]
+and s_koch =
+  [A,
+   Seq ([S A;S C;S A;S A;S B;S A;S A;S B;S A;S B;S A;S C;S A;S C;S A] @
+	   [S A;S B;S A;S B;S A;S C;S A;S C;S A;S A;S C;S A;S A;S B;S A])]
+and i_koch =
+  [(A,[Line(10)]); (B,[Turn(90)]); (C,[Turn(-90)]); (D,[Move(10)])];;
+
+(* koch squares and lakes *)
+let w_koch1 = Seq [S A;S C;S A;S C;S A;S C;S A]
+and s_koch1 =
+  [A,
+   Seq ([S A;S C;S D;S B;S A;S A;S C;S A;S C;S A;S A;S C;S A;S D;S C;S A;S A] @
+	   [S B;S D;S C;S A;S A;S B;S A;S B;S A;S A;S B;S A;S D;S B;S A;S A] @
+	   [S A]);
+   D,
+   Seq [S D;S D;S D;S D;S D;S D]];;
+
+(* koch variants *)
+let s_koch2 =
+  [A, Seq [S A;S A;S B;S A;S B;S A;S B;S A;S B;S A;S B;S A;S C;S A]]
+and s_koch3 =
+  [A, Seq [S A;S A;S B;S A;S B;S A;S B;S A;S B;S A;S A]]
+and s_koch4 =
+  [A,Seq [S A;S A;S B;S A;S C;S A;S B;S A;S B;S A;S A]]
+and s_koch5 =
+  [A,Seq [S A;S A;S B;S A;S B;S B;S A;S B;S A]];;
+
+(* Sierpinski Gasket. ABOP page 11 *)
+let w_sierp = Seq [S B]
+and s_sierp = [
+  (A, Seq [S B; S C; S A; S C; S B]);
+  (B, Seq [S A; S D; S B; S D; S A])
+]
+and i_sierp = [(A,[Line(6)]);(B,[Line(6)]);(C,[Turn(60)]);(D,[Turn(-60)])];;
+
+(* convertir des caractères en constantes du type bracketed *)
+let tree_of_char = function
+  | 'L' -> S L
+  | 'R' -> S R
+  | '+' -> S P
+  | '-' -> S M
+  | c -> failwith ("Unknown character: "^(String.make 1 c))
+;;
+
+(* convertir une chaîne sans parenthèses en un bracketed *)
+let tree_of_string s =
+  let rec tree_of_string_aux i =
+    if i = String.length s
+    then []
+    else (tree_of_char (String.get s i))::(tree_of_string_aux (i+1))
+  in Seq (tree_of_string_aux 0)
+;;
 
 
+(* Hexagonal Gosper curve. ABOP page 12 *)
+let w_6gosp = S L
+and s_6gosp = [
+  (L, tree_of_string "L+R++R-L--LL-R+");
+  (R, tree_of_string "-L+RR++R+L--L-R")
+]
+and i_6gosp =[(L,[Line(4)]);(R,[Line(4)]);(P,[Turn(60)]);(M,[Turn(-60)])];;
 
+(* Quadratic Gosper curve. ABOP page 12 *)
+let w_4gosp = tree_of_string "-R"
+and s_4gosp = [
+  (L, tree_of_string "LL-R-R+L+L-R-RL+R+LLR-L+R+LL+R-LR-R-L+L+RR-");
+  (R, tree_of_string "+LL-R-R+L+LR+L-RR-L-R+LRR-L-RL+L+R-R-L+L+RR")
+]
+and i_4gosp = [(L,[Line(2)]);(R,[Line(2)]);(P,[Turn(90)]);(M,[Turn(-90)])];;
 
+(* Branching 1. ABOP page 25 *)
+let w_br1 = S F
+and s_br1 = [(F, Seq [S F; Branch [S P; S F]; S F; Branch [S M; S F]; S F])]
+and i_br1 = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)])];;
 
-(*Images.save "dessin.bla" None [] img;;*)
+(* Branching 2. ABOP page 25 *)
+let w_br2 = S F
+and s_br2 = [(F, Seq [S F; Branch [S P; S F]; S F; Branch [S M; S F]; Branch [S F]])]
+and i_br2 = [(F,[Line(5)]);(P,[Turn(20)]);(M,[Turn(-20)])];;
 
+(* Plant *)
+let w_plant = S X
+and s_plant = [
+  (X, Seq [S F; S M; Branch [Branch [S X]; S P; S X]; S P; S F; Branch[S P; S F; S X]; S M; S X]);
+  (F, Seq[S F; S F])
+]
+and i_plant = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]); (X, [])];; 
+
+let exemples = [
+  "snow",  (w_snow, s_snow, i_snow) ;
+  "koch",  (w_koch, s_koch, i_koch) ;
+  "koch1", (w_koch1, s_koch1, i_koch) ;
+  "koch2", (w_koch, s_koch2, i_koch) ;
+  "koch3", (w_koch, s_koch3, i_koch) ;
+  "koch4", (w_koch, s_koch4, i_koch) ;
+  "koch5", (w_koch, s_koch5, i_koch);
+  "dragon", (w_dragon, s_dragon, i_dragon);
+  "sierp", (w_sierp, s_sierp, i_sierp);
+  "6gosp", (w_6gosp, s_6gosp, i_6gosp);
+  "4gosp", (w_4gosp, s_4gosp, i_4gosp);
+  "plant", (w_plant, s_plant, i_plant);
+  "br1",   (w_br1,s_br1,i_br1);
+  "br2",   (w_br2,s_br2,i_br2)
+]
+;;
+
+try
+  let (chaine, rws, commands) =  List.assoc !exemple exemples
+  in draw chaine rws commands !n !grow !clear
+with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
 
 
 (* A FAIRE :

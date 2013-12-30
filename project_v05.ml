@@ -1,10 +1,12 @@
 
-(*#directory "+camlimages";;
+(*
+#directory "+camlimages";;
 #use "topfind";; 
 #require "camlimages.all_formats";;
 #require "camlimages.graphics";;
 #load "graphics.cma"
-#load "unix.cma";;*)
+#load "unix.cma";;
+*)
 
 (* ocamlfind ocamlc -package camlimages.all_formats -package labltk -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
 
@@ -48,6 +50,7 @@ type bracketed = S of symbol
 type turtle_command= Move of int
                  | Line of int
                  | Turn of int
+		 | TurnPhi of int (* tourner par rapport a la z axis *)
                  | Rectangle of int * int
                  | MoveNoScale of int;;
 
@@ -87,22 +90,24 @@ let rec taille t = match t with
 let pi = 2.*.(asin 1.);;
 let rad_of_deg d = (2. *. pi *. (float_of_int d) ) /. 360.;;
 
-type coords = { x : float; y : float };;
+type coords = { x : float; y : float; z : float };;
 type maxmin = { maxx : float; minx : float; maxy : float; miny : float };; (* or 2 coords *)
 
 
-(* calcule nouveaux x et y *)
-let deplace point dist theta scale_factor =
+(* calcule nouveaux x, y et z *)
+(* NB si phi = 0, il n'y aura pas de ligne, donc il faut avoir phi = 90 par defaut *)
+let deplace point dist theta phi scale_factor =
   let scaled_dist = (float_of_int dist) /. scale_factor in
-  let new_x = point.x +.(scaled_dist *. (cos (rad_of_deg theta)))
-  and new_y = point.y +.(scaled_dist *. (sin (rad_of_deg theta)))
-  in { x = new_x; y = new_y };;
+  let new_x = point.x +.(scaled_dist *. (cos (rad_of_deg theta)) *. (sin (rad_of_deg phi)))
+  and new_y = point.y +.(scaled_dist *. (sin (rad_of_deg theta)) *. (sin (rad_of_deg phi)))
+  and new_z = point.z +.(scaled_dist *. (cos (rad_of_deg phi)))
+  in { x = new_x; y = new_y; z = new_z };;
 
 
 
 (* retourne les noueaux x et y plus un maxmin altere si neccessaire *)
-let deplace_compare point dist theta scale_factor maxmin_xy =
-  let new_point = deplace point dist theta scale_factor
+let deplace_compare point dist theta phi scale_factor maxmin_xy =
+  let new_point = deplace point dist theta phi scale_factor
   in ( new_point, { minx = (min maxmin_xy.minx new_point.x);
                  maxx = (max maxmin_xy.maxx new_point.x);
                  miny = (min maxmin_xy.miny new_point.y);
@@ -114,33 +119,41 @@ let calc_new_minmax point maxmin_xy =
     miny = (min maxmin_xy.miny point.y);
     maxy = (max maxmin_xy.maxy point.y) } ;;
 
+(* maybe make a new entity = viewing conditions, perspective?
+   theta, phi, some_kind_of_zoom_factor related to minmax_xy *)
 (* dessine une operation *)
-let rec execute point theta minmax_xy scale_factor instructions check =
+let rec execute point theta phi minmax_xy scale_factor instructions check =
   match instructions with
-  | [] -> (point,theta,minmax_xy)
+  | [] -> (point,theta,phi,minmax_xy)
   | instruction::instructions' ->
     match instruction with
     | Line(dist) ->
       begin
-        let new_point = deplace point dist theta scale_factor in
+        let new_point = deplace point dist theta phi scale_factor in
         if check then (* todo implement min max deplace_compare *)
          moveto (int_of_float new_point.x) (int_of_float new_point.y)
         else
          lineto (int_of_float new_point.x) (int_of_float new_point.y);
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check
       end
     | Move(dist) ->
       begin
-        let new_point = deplace point dist theta scale_factor in
+        let new_point = deplace point dist theta phi scale_factor in
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check
       end
     | Turn(deg) ->
       begin
         let newtheta = (theta + deg) mod 360 in
-        execute point newtheta minmax_xy scale_factor instructions' check
+        execute point newtheta phi minmax_xy scale_factor instructions' check
+      end
+    | TurnPhi (deg) ->
+      begin
+	let newphi = 180 - abs (((phi + deg) mod 360) - 180) in
+                      (* on veut: 0 < phi < 180 et phi = 181 -> phi = 179 *)
+	execute point theta newphi minmax_xy scale_factor instructions' check
       end
     | Rectangle(largeur, hauteur) ->
       begin
@@ -148,50 +161,51 @@ let rec execute point theta minmax_xy scale_factor instructions check =
         and *) scaled_largeur = int_of_float ( (float_of_int largeur) /. scale_factor)
         in
         if check then () else fill_rect (int_of_float point.x) (int_of_float point.y) scaled_largeur hauteur;
-        let new_point = deplace point largeur theta scale_factor in
+        let new_point = deplace point largeur theta phi scale_factor in
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check
       end
     | MoveNoScale(dist) ->
       begin
-        let new_point = deplace point dist theta 1.0 in
+        let new_point = deplace point dist theta phi 1.0 in
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check
       end
 ;;
 
 (* lis chaque symbole de la sequence et associe une liste d'instructions, passee a la fonction execute *)
-let rec aux_draw chaine interpretation point minmax_xy theta scale_factor check =
+let rec aux_draw chaine interpretation point minmax_xy theta phi scale_factor check =
   begin
     moveto (int_of_float point.x) (int_of_float point.y);
     match chaine with
     | Branch branch ->
-      let (_, _, minmax_xy') =
-        aux_draw (Seq branch) interpretation point minmax_xy theta scale_factor check
-      in (point,theta, minmax_xy')
+      let (_, _, _, minmax_xy') =
+        aux_draw (Seq branch) interpretation point minmax_xy theta phi scale_factor check
+      in (point, theta, phi, minmax_xy')
     | Seq seq ->
       begin
         match seq with
-        | [] -> (point, theta, minmax_xy)
+        | [] -> (point, theta, phi, minmax_xy)
         | a::l -> (* make return value of x y from draw use in next call *)
-         let (point', theta', minmax_xy') = aux_draw a interpretation point minmax_xy theta scale_factor check in
-         aux_draw (Seq l) interpretation point' minmax_xy' theta' scale_factor check
+         let (point', theta', phi' ,minmax_xy') = aux_draw a interpretation point minmax_xy theta phi scale_factor check in
+         aux_draw (Seq l) interpretation point' minmax_xy' theta' phi' scale_factor check
       end
-    | S symbol -> let (point',theta', minmax_xy') = execute point theta minmax_xy scale_factor (List.assoc symbol interpretation) check in
-                 (point',theta', minmax_xy')
+    | S symbol -> let (point',theta', phi', minmax_xy') = execute point theta phi minmax_xy scale_factor (List.assoc symbol interpretation) check in
+                 (point',theta', phi', minmax_xy')
   end
 ;;
 
 (* renvoie l'echelle le plus extreme d'agrandissement ou de reduction d'une partie du dessin apres sa substitution *)
+(* NB maybe this should check using the input theta and phi ... *)
 let rec check_echelle rws interpretation =
   let minmax_xy = { minx = 0.0 ; miny = 0.0 ; maxx = 0.0 ; maxy = 0.0 }
   in match rws with
   | [] -> 1.
   | (symbol, remplacement)::rws' ->         
-    let (point_symbol, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.} minmax_xy 0 1. true
-    and (point_remplacement, _, _) = aux_draw remplacement interpretation { x=0. ; y=0. } minmax_xy 0 1. true
+    let (point_symbol, _, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.; z=0.} minmax_xy 0 90 1. true
+    and (point_remplacement, _, _, _) = aux_draw remplacement interpretation { x=0. ; y=0.; z=0. } minmax_xy 0 90 1. true
     in
     let delta_sym = sqrt((point_symbol.x**2.)+.(point_symbol.y**2.))
     and delta_rem = sqrt((point_remplacement.x**2.)+.(point_remplacement.y**2.))
@@ -201,15 +215,17 @@ let rec check_echelle rws interpretation =
 
 
 (* Calcule le scale factor s et le point de depart (x,y) pour que le nieme chaine soit centre et contenu dans la fenetre *)
+
 let check_adjustment largeur_fenetre hauteur_fenetre chaine interpretation echelle =
   let minmax_xy = { minx = 0.0 ; miny = 0.0 ; maxx = 0.0 ; maxy = 0.0 }
   in
-  let (_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0 } minmax_xy 0 echelle true in
+  let (_,_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0; z = 0.0 } minmax_xy 0 90 echelle true in
   (* begin print_float new_minmax_xy.maxx; *)
   let s = 1.5 *. ( max (( new_minmax_xy.maxx -. new_minmax_xy.minx)/.largeur_fenetre)
                  (( new_minmax_xy.maxy -. new_minmax_xy.miny)/.hauteur_fenetre ) )
   in (s, { x = ((largeur_fenetre /. 2.) -. ( (1.0 /. s) *. ( (new_minmax_xy.maxx +. new_minmax_xy.minx)/. 2. )));
-           y = ((hauteur_fenetre /. 2.) -. ( (1.0 /. s) *. ( (new_minmax_xy.maxy +. new_minmax_xy.miny)/. 2. ))) } )
+           y = ((hauteur_fenetre /. 2.) -. ( (1.0 /. s) *. ( (new_minmax_xy.maxy +. new_minmax_xy.miny)/. 2. )));
+	   z = 0. (* z pas utilise ici *) } )
   (* end *)
 ;;
 
@@ -266,7 +282,7 @@ and
   begin
     if clear then clear_graph() else ();
     let minmax_xy = { minx = 0.0 ; maxx = 0.0 ; miny = 0.0 ; maxy = 0.0 } in
-    let (_,_,_)= aux_draw chaine interpretation point_depart minmax_xy 0 ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
+    let (_,_,_,_)= aux_draw chaine interpretation point_depart minmax_xy 0 90 ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
     (* si il s'agit de la dernière itération *)
     if iter=(k+1) then begin
       reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear (* appeler la réponse à l'utilisateur *)
@@ -418,6 +434,16 @@ and s_plant = [
 ]
 and i_plant = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]); (X, [])];; 
 
+(* Plant 3D *)
+let w_plant3d = S X
+and s_plant3d = [
+  (X, Seq [S F; S M; S N; Branch [Branch [S X]; S P; S Q; S X];
+	   S P; S Q; S F; Branch[S P; S Q; S F; S X]; S M; S N; S X]);
+  (F, Seq[S F; S F])
+]
+and i_plant3d = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]);
+		 (Q,[TurnPhi(+25)]); (N,[TurnPhi(-25)]); (X, [])];; 
+
 let exemples = [
   "snow",  (w_snow, s_snow, i_snow) ;
   "koch",  (w_koch, s_koch, i_koch) ;
@@ -431,6 +457,7 @@ let exemples = [
   "6gosp", (w_6gosp, s_6gosp, i_6gosp);
   "4gosp", (w_4gosp, s_4gosp, i_4gosp);
   "plant", (w_plant, s_plant, i_plant);
+  "plant3d", (w_plant3d, s_plant3d, i_plant3d);
   "br1",   (w_br1,s_br1,i_br1);
   "br2",   (w_br2,s_br2,i_br2)
 ]
@@ -444,6 +471,7 @@ try
 with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
 
 
+(* draw chaine w_koch s_kock i_kock 1 true true;; *)
 
 (* A FAIRE :
 

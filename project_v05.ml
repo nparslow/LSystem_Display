@@ -40,6 +40,9 @@ exit 0
 
 end;;*)
 
+let thetaInit = ref 0;;
+let phiInit = ref 90;;
+
 type symbol = A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z;;
 (*type symbol = char;;*)
 
@@ -98,7 +101,7 @@ type maxmin = { maxx : float; minx : float; maxy : float; miny : float };; (* or
 (* NB si phi = 0, il n'y aura pas de ligne, donc il faut avoir phi = 90 par defaut *)
 let deplace point dist theta phi scale_factor =
   let scaled_dist = (float_of_int dist) /. scale_factor in
-  let new_x = point.x +.(scaled_dist *. (cos (rad_of_deg theta)) *. (sin (rad_of_deg phi)))
+  let new_x = point.x +.(scaled_dist *. (cos (rad_of_deg theta)) )
   and new_y = point.y +.(scaled_dist *. (sin (rad_of_deg theta)) *. (sin (rad_of_deg phi)))
   and new_z = point.z +.(scaled_dist *. (cos (rad_of_deg phi)))
   in { x = new_x; y = new_y; z = new_z };;
@@ -204,8 +207,8 @@ let rec check_echelle rws interpretation =
   in match rws with
   | [] -> 1.
   | (symbol, remplacement)::rws' ->         
-    let (point_symbol, _, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.; z=0.} minmax_xy 0 90 1. true
-    and (point_remplacement, _, _, _) = aux_draw remplacement interpretation { x=0. ; y=0.; z=0. } minmax_xy 0 90 1. true
+    let (point_symbol, _, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.; z=0.} minmax_xy !thetaInit !phiInit 1. true
+    and (point_remplacement, _, _, _) = aux_draw remplacement interpretation { x=0. ; y=0.; z=0. } minmax_xy !thetaInit !phiInit 1. true
     in
     let delta_sym = sqrt((point_symbol.x**2.)+.(point_symbol.y**2.))
     and delta_rem = sqrt((point_remplacement.x**2.)+.(point_remplacement.y**2.))
@@ -219,7 +222,7 @@ let rec check_echelle rws interpretation =
 let check_adjustment largeur_fenetre hauteur_fenetre chaine interpretation echelle =
   let minmax_xy = { minx = 0.0 ; miny = 0.0 ; maxx = 0.0 ; maxy = 0.0 }
   in
-  let (_,_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0; z = 0.0 } minmax_xy 0 90 echelle true in
+  let (_,_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0; z = 0.0 } minmax_xy !thetaInit !phiInit echelle true in
   (* begin print_float new_minmax_xy.maxx; *)
   let s = 1.5 *. ( max (( new_minmax_xy.maxx -. new_minmax_xy.minx)/.largeur_fenetre)
                  (( new_minmax_xy.maxy -. new_minmax_xy.miny)/.hauteur_fenetre ) )
@@ -260,15 +263,30 @@ let rec reponse_utilisateur k chaine rws interpretation point_depart echelle gro
 	  let img =  get_image 0 0 (size_x ()) (size_y ())
 	  in  save_image img "pic.bmp"
 	| _ -> begin
+	  let (new_point_depart, zoom ) =
 	  (match event.key with
-	  | 'o' ->  set_color (rgb 246 121 25)
-	  | 'r' ->  set_color red
-	  | 'v' ->  set_color green
-	  | 'j' -> set_color yellow
-	  | 'b' -> set_color black
-	  | _ -> ());
+	  | 'o' -> (set_color (rgb 246 121 25); (point_depart, 1.0) )
+	  | 'r' -> (set_color red; (point_depart, 1.0) )
+	  | 'v' -> (set_color green; (point_depart, 1.0) )
+	  | 'j' -> (set_color yellow; (point_depart, 1.0) )
+	  | 'b' -> (set_color black; (point_depart, 1.0) )
+	  | '1' -> (thetaInit := !thetaInit + 10; (point_depart, 1.0) )
+	  | '2' -> (thetaInit := !thetaInit - 10; (point_depart, 1.0) )
+	  | 'a' -> (phiInit := !phiInit + 10 ; (point_depart, 1.0) )
+	  | 'z' -> (phiInit := !phiInit + 10; (point_depart, 1.0) )
+	  | '3' -> ({x=float_of_int(int_of_float (point_depart.x -. 10.) mod (size_x()));
+		     y=point_depart.y; z=point_depart.z},1.0)
+	  | '4' -> ({x=float_of_int(int_of_float (point_depart.x +. 10.) mod (size_x()));
+		     y=point_depart.y; z=point_depart.z},1.0)
+	  | '5' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y -. 10.) mod (size_y()));
+		     z=point_depart.z},1.0)
+	  | '6' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y +. 10.) mod (size_y()));
+		     z=point_depart.z},1.0)
+	  | '7' -> (point_depart,1.1)
+	  | '8' -> (point_depart,0.9)
+	  | _ -> (point_depart, 1.0)) in
 	  
-	  rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
+	  rec_draw k chaine rws interpretation new_point_depart echelle grow (scale_factor*.zoom) iter clear;
 	  ();
 	end)
       else ()
@@ -282,7 +300,7 @@ and
   begin
     if clear then clear_graph() else ();
     let minmax_xy = { minx = 0.0 ; maxx = 0.0 ; miny = 0.0 ; maxy = 0.0 } in
-    let (_,_,_,_)= aux_draw chaine interpretation point_depart minmax_xy 0 90 ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
+    let (_,_,_,_)= aux_draw chaine interpretation point_depart minmax_xy !thetaInit !phiInit ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
     (* si il s'agit de la dernière itération *)
     if iter=(k+1) then begin
       reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear (* appeler la réponse à l'utilisateur *)

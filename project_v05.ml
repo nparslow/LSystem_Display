@@ -1,8 +1,8 @@
 
 (*#directory "+camlimages";;
- #use "topfind";; 
- #require "camlimages.all_formats";;
- #require "camlimages.graphics";;*)
+#use "topfind";; 
+#require "camlimages.all_formats";;
+#require "camlimages.graphics";;*)
 
 (* ocamlfind ocamlc -package camlimages.all_formats -package labltk -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
 
@@ -233,32 +233,32 @@ let to_graphics rgb_matrix =
           (fun (r, g, b) -> Graphics.rgb r g b))
        rgb_matrix);;
 
-let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear=
-  try
-    while true do
-      let event = wait_next_event [Key_pressed]
-      in 
-      if event.keypressed
-      then
-	match event.key with
-	| 'q' -> raise Quit
-	| 's' -> 
-	  let img =  get_image 0 0 (size_x ()) (size_y ())
-	  in  save_image img "picture.bmp"
-	| _ -> begin
-	  (match event.key with
-	    | 'o' ->  set_color (rgb 246 121 25)
-	    | 'r' ->  set_color red
-	    | 'v' ->  set_color green
-	    | 'j' -> set_color yellow
-	    | 'b' -> set_color black
-	    | _ -> ());
-	       
-	  rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
-	  ();
-	end
-    done
-  with Quit -> close_graph();
+let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear = 
+
+  let rec loop = 
+    let event = wait_next_event [Key_pressed]
+    in 
+    if event.keypressed
+    then
+      match event.key with
+      | 'q' -> close_graph()
+      | 's' -> 
+	let img =  get_image 0 0 (size_x ()) (size_y ())
+	in  save_image img "picture.bmp"
+      | _ -> begin
+	(match event.key with
+	| 'o' ->  set_color (rgb 246 121 25)
+	| 'r' ->  set_color red
+	| 'v' ->  set_color green
+	| 'j' -> set_color yellow
+	| 'b' -> set_color black
+	| _ -> ());
+	
+	rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
+	();
+      end
+  in loop
+   
 
 and
 
@@ -437,10 +437,13 @@ let exemples = [
 ]
 ;;
 
+
+
 try
   let (chaine, rws, commands) =  List.assoc !exemple exemples
   in draw chaine rws commands !n !grow !clear
 with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
+
 
 
 (* A FAIRE :

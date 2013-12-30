@@ -2,7 +2,9 @@
 (*#directory "+camlimages";;
 #use "topfind";; 
 #require "camlimages.all_formats";;
-#require "camlimages.graphics";;*)
+#require "camlimages.graphics";;
+#load "graphics.cma"
+#load "unix.cma";;*)
 
 (* ocamlfind ocamlc -package camlimages.all_formats -package labltk -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
 
@@ -11,7 +13,7 @@ open Arg;;
 open Images;;
 open Graphics;;
 
-let n = ref 0;;
+let n = ref 1;;
 let grow = ref false;;
 let clear = ref true;;
 let exemple = ref "snow";;
@@ -81,10 +83,6 @@ let rec taille t = match t with
 
 
 (* Intepretation *)
-(*#load "graphics.cma"*)
-open Graphics;;
-
-(*#load "unix.cma";;*)
 
 let pi = 2.*.(asin 1.);;
 let rad_of_deg d = (2. *. pi *. (float_of_int d) ) /. 360.;;
@@ -234,35 +232,36 @@ let to_graphics rgb_matrix =
        rgb_matrix);;
 
 let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear = 
-
-  let rec loop = 
-    let event = wait_next_event [Key_pressed]
-    in 
-    if event.keypressed
-    then
-      match event.key with
-      | 'q' -> close_graph()
-      | 's' -> 
-	let img =  get_image 0 0 (size_x ()) (size_y ())
-	in  save_image img "picture.bmp"
-      | _ -> begin
+  try
+    while true do
+      let event = wait_next_event [Key_pressed]
+      in 
+      if event.keypressed
+      then
 	(match event.key with
-	| 'o' ->  set_color (rgb 246 121 25)
-	| 'r' ->  set_color red
-	| 'v' ->  set_color green
-	| 'j' -> set_color yellow
-	| 'b' -> set_color black
-	| _ -> ());
-	
-	rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
-	();
-      end
-  in loop
-   
-
+	| 'q' -> raise Quit
+	| 's' -> 
+	  let img =  get_image 0 0 (size_x ()) (size_y ())
+	  in  save_image img "pic.bmp"
+	| _ -> begin
+	  (match event.key with
+	  | 'o' ->  set_color (rgb 246 121 25)
+	  | 'r' ->  set_color red
+	  | 'v' ->  set_color green
+	  | 'j' -> set_color yellow
+	  | 'b' -> set_color black
+	  | _ -> ());
+	  
+	  rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear;
+	  ();
+	end)
+      else ()
+    done
+  with Quit -> close_graph()
+    
 and
-
-rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear =
+    
+    rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear =
   let tmp = ( if grow then 1 else k ) in
   begin
     if clear then clear_graph() else ();

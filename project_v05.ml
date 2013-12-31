@@ -1,12 +1,11 @@
 
-(*
-#directory "+camlimages";;
-#use "topfind";; 
+(*#directory "+camlimages";;
+#use "topfind";;
 #require "camlimages.all_formats";;
 #require "camlimages.graphics";;
 #load "graphics.cma"
-#load "unix.cma";;
-*)
+#load "unix.cma";;*)
+
 
 (* ocamlfind ocamlc -package camlimages.all_formats -package labltk -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
 
@@ -53,13 +52,15 @@ type bracketed = S of symbol
 type turtle_command= Move of int
                  | Line of int
                  | Turn of int
-		 | TurnPhi of int (* tourner par rapport a la z axis *)
+                 | TurnPhi of int (* tourner par rapport a la z axis *)
                  | Rectangle of int * int
                  | MoveNoScale of int;;
 
 type rewriting_system = (symbol * bracketed) list;;
 
 type interpretation = (symbol * turtle_command list) list;;
+
+type flux = NA | Flux of out_channel;;
 
 (* Substitutions *)
 let rec rewrite rws brack =
@@ -122,10 +123,38 @@ let calc_new_minmax point maxmin_xy =
     miny = (min maxmin_xy.miny point.y);
     maxy = (max maxmin_xy.maxy point.y) } ;;
 
+
+let sauvegarde save command point_xy new_xy current_color= 
+    let (red, green, blue) = current_color in
+    match save with
+    | NA -> begin
+      ()
+      end
+    | Flux(canal) -> 
+      (match command with
+      | Line(_) -> output_string canal (String.concat "" ["<line x1=\""; string_of_float (point_xy.x); "\" y1=\""; 
+							  (string_of_float (point_xy.y)); "\" x2=\"";
+							  (string_of_float new_xy.x);"\" y2=\"";
+							  (string_of_float new_xy.y);
+							  "\" style=\"stroke:rgb("; 
+							  string_of_int red; ","; string_of_int green;","; string_of_int blue; 
+							  ");stroke-width:0.5\" />\n"])
+	
+      | Rectangle(largeur,hauteur) -> output_string canal (String.concat "" ["<rect width=\"";
+									     (string_of_int largeur);
+									     "\" height=\""; (string_of_int hauteur);
+									     "\" style=\"fill:rgb(";
+									     string_of_int red; ","; string_of_int green;","; string_of_int blue; 
+									     ");stroke-width:0.5;stroke:rgb(255,0,0)\">\n"])
+	
+      | Move(_) -> output_string canal (String.concat "" [" <path d=\"M" ; string_of_float new_xy.x; string_of_float new_xy.y; "\"/>\n"])
+      | _ -> ())
+;;
+
 (* maybe make a new entity = viewing conditions, perspective?
-   theta, phi, some_kind_of_zoom_factor related to minmax_xy *)
+theta, phi, some_kind_of_zoom_factor related to minmax_xy *)
 (* dessine une operation *)
-let rec execute point theta phi minmax_xy scale_factor instructions check =
+let rec execute point theta phi minmax_xy scale_factor instructions check save current_color=
   match instructions with
   | [] -> (point,theta,phi,minmax_xy)
   | instruction::instructions' ->
@@ -133,102 +162,119 @@ let rec execute point theta phi minmax_xy scale_factor instructions check =
     | Line(dist) ->
       begin
         let new_point = deplace point dist theta phi scale_factor in
+	let () = sauvegarde save (Line(dist))point new_point current_color (* Ecrire dans le fichier .svg *) in
+
+        (* Si on veut vérifier la taille de l'image pour calculer l'échelle *)
         if check then (* todo implement min max deplace_compare *)
          moveto (int_of_float new_point.x) (int_of_float new_point.y)
         else
          lineto (int_of_float new_point.x) (int_of_float new_point.y);
+
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta phi new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check save current_color
+    
       end
     | Move(dist) ->
       begin
         let new_point = deplace point dist theta phi scale_factor in
+	let () = sauvegarde save (Move(dist)) point new_point current_color in (* Ecrire dans le fichier .svg *)
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
+
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta phi new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check save current_color;
+       
       end
     | Turn(deg) ->
       begin
         let newtheta = (theta + deg) mod 360 in
-        execute point newtheta phi minmax_xy scale_factor instructions' check
+        execute point newtheta phi minmax_xy scale_factor instructions' check save current_color;
       end
     | TurnPhi (deg) ->
       begin
-	let newphi = 180 - abs (((phi + deg) mod 360) - 180) in
+        let newphi = 180 - abs (((phi + deg) mod 360) - 180) in
                       (* on veut: 0 < phi < 180 et phi = 181 -> phi = 179 *)
-	execute point theta newphi minmax_xy scale_factor instructions' check
+        execute point theta newphi minmax_xy scale_factor instructions' check save current_color;
       end
     | Rectangle(largeur, hauteur) ->
       begin
         let (* scaled_hauteur = int_of_float ( (float_of_int hauteur) /. scale_factor)
-        and *) scaled_largeur = int_of_float ( (float_of_int largeur) /. scale_factor)
+and *) scaled_largeur = int_of_float ( (float_of_int largeur) /. scale_factor)
         in
+	
+
         if check then () else fill_rect (int_of_float point.x) (int_of_float point.y) scaled_largeur hauteur;
         let new_point = deplace point largeur theta phi scale_factor in
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
+	let () = sauvegarde save (Rectangle(largeur, hauteur)) point new_point current_color; (* Ecrire dans le fichier .svg *) in
+
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta phi new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check save current_color;
+
       end
     | MoveNoScale(dist) ->
       begin
         let new_point = deplace point dist theta phi 1.0 in
         moveto (int_of_float new_point.x) (int_of_float new_point.y);
+
+	sauvegarde save (Move(dist)) point new_point current_color; (* Ecrire dans le fichier .svg *)
+
         let new_minmax_xy = if check then calc_new_minmax new_point minmax_xy else minmax_xy in
-        execute new_point theta phi new_minmax_xy scale_factor instructions' check
+        execute new_point theta phi new_minmax_xy scale_factor instructions' check save current_color;
+        
       end
 ;;
 
 (* lis chaque symbole de la sequence et associe une liste d'instructions, passee a la fonction execute *)
-let rec aux_draw chaine interpretation point minmax_xy theta phi scale_factor check =
+let rec aux_draw chaine interpretation point minmax_xy theta phi scale_factor check save current_color =
   begin
     moveto (int_of_float point.x) (int_of_float point.y);
     match chaine with
     | Branch branch ->
       let (_, _, _, minmax_xy') =
-        aux_draw (Seq branch) interpretation point minmax_xy theta phi scale_factor check
+        aux_draw (Seq branch) interpretation point minmax_xy theta phi scale_factor check save current_color
       in (point, theta, phi, minmax_xy')
     | Seq seq ->
       begin
         match seq with
         | [] -> (point, theta, phi, minmax_xy)
         | a::l -> (* make return value of x y from draw use in next call *)
-         let (point', theta', phi' ,minmax_xy') = aux_draw a interpretation point minmax_xy theta phi scale_factor check in
-         aux_draw (Seq l) interpretation point' minmax_xy' theta' phi' scale_factor check
+         let (point', theta', phi' ,minmax_xy') = aux_draw a interpretation point minmax_xy theta phi scale_factor check save current_color in
+         aux_draw (Seq l) interpretation point' minmax_xy' theta' phi' scale_factor check save current_color
       end
-    | S symbol -> let (point',theta', phi', minmax_xy') = execute point theta phi minmax_xy scale_factor (List.assoc symbol interpretation) check in
-                 (point',theta', phi', minmax_xy')
+    | S symbol -> let (point',theta', phi', minmax_xy') = execute point theta phi minmax_xy scale_factor (List.assoc symbol interpretation) check save current_color in
+                  (point',theta', phi', minmax_xy')
   end
 ;;
 
 (* renvoie l'echelle le plus extreme d'agrandissement ou de reduction d'une partie du dessin apres sa substitution *)
 (* NB maybe this should check using the input theta and phi ... *)
-let rec check_echelle rws interpretation =
+let rec check_echelle rws interpretation save current_color =
   let minmax_xy = { minx = 0.0 ; miny = 0.0 ; maxx = 0.0 ; maxy = 0.0 }
   in match rws with
   | [] -> 1.
-  | (symbol, remplacement)::rws' ->         
-    let (point_symbol, _, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.; z=0.} minmax_xy !thetaInit !phiInit 1. true
-    and (point_remplacement, _, _, _) = aux_draw remplacement interpretation { x=0. ; y=0.; z=0. } minmax_xy !thetaInit !phiInit 1. true
+  | (symbol, remplacement)::rws' ->
+    let (point_symbol, _, _, _) = aux_draw (S symbol) interpretation { x=0. ; y=0.; z=0.} minmax_xy !thetaInit !phiInit 1. true save current_color
+    and (point_remplacement, _, _, _) = aux_draw remplacement interpretation { x=0. ; y=0.; z=0. } minmax_xy !thetaInit !phiInit 1. true save current_color
     in
     let delta_sym = sqrt((point_symbol.x**2.)+.(point_symbol.y**2.))
     and delta_rem = sqrt((point_remplacement.x**2.)+.(point_remplacement.y**2.))
-    in let tmp = max (delta_rem/.delta_sym) (check_echelle rws' interpretation)
+    in let tmp = max (delta_rem/.delta_sym) (check_echelle rws' interpretation save current_color)
        in if delta_sym = 0.0 then 1. else tmp
 ;;
 
 
 (* Calcule le scale factor s et le point de depart (x,y) pour que le nieme chaine soit centre et contenu dans la fenetre *)
 
-let check_adjustment largeur_fenetre hauteur_fenetre chaine interpretation echelle =
+let check_adjustment largeur_fenetre hauteur_fenetre chaine interpretation echelle save current_color=
   let minmax_xy = { minx = 0.0 ; miny = 0.0 ; maxx = 0.0 ; maxy = 0.0 }
   in
-  let (_,_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0; z = 0.0 } minmax_xy !thetaInit !phiInit echelle true in
+  let (_,_,_, new_minmax_xy) = aux_draw chaine interpretation { x = 0.0 ; y = 0.0; z = 0.0 } minmax_xy !thetaInit !phiInit echelle true save current_color in
   (* begin print_float new_minmax_xy.maxx; *)
   let s = 1.5 *. ( max (( new_minmax_xy.maxx -. new_minmax_xy.minx)/.largeur_fenetre)
                  (( new_minmax_xy.maxy -. new_minmax_xy.miny)/.hauteur_fenetre ) )
   in (s, { x = ((largeur_fenetre /. 2.) -. ( (1.0 /. s) *. ( (new_minmax_xy.maxx +. new_minmax_xy.minx)/. 2. )));
            y = ((hauteur_fenetre /. 2.) -. ( (1.0 /. s) *. ( (new_minmax_xy.maxy +. new_minmax_xy.miny)/. 2. )));
-	   z = 0. (* z pas utilise ici *) } )
+         z = 0. (* z pas utilise ici *) } )
   (* end *)
 ;;
 
@@ -240,70 +286,84 @@ let save_image image file_name =
   let image = Images.Rgb24 (Graphic_image.image_of image) in
   Images.save file_name None [] image;;
 
-(* transforme une matrice de triplets (r,g,b) en une "image graphics"
-de type Graphics.image *)
+(* Commencer un fichier svg - entêtes du fichier *)
+let start_svg_file c= 
+  output_string c "<!DOCTYPE html>
+<html>
+<body>
+<svg height=\"600\" width=\"600\">";; 
 
-let to_graphics rgb_matrix =
-  Graphics.make_image
-    (Array.map
-       (Array.map
-          (fun (r, g, b) -> Graphics.rgb r g b))
-       rgb_matrix);;
+(* Finir un fichier svg - balises fermantes *)
+let finish_svg_file c =
+  begin
+    output_string c "</svg>
+</body>
+</html>";
+    close_out c
+  end;;
 
-let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear = 
+
+let rec reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor zoom iter clear current_color =
   try
     while true do
       let event = wait_next_event [Key_pressed]
-      in 
+      in
       if event.keypressed
       then
-	(match event.key with
-	| 'q' -> raise Quit
-	| 's' -> 
-	  let img =  get_image 0 0 (size_x ()) (size_y ())
-	  in  save_image img "pic.bmp"
-	| _ -> begin
-	  let (new_point_depart, zoom ) =
-	  (match event.key with
-	  | 'o' -> (set_color (rgb 246 121 25); (point_depart, 1.0) )
-	  | 'r' -> (set_color red; (point_depart, 1.0) )
-	  | 'v' -> (set_color green; (point_depart, 1.0) )
-	  | 'j' -> (set_color yellow; (point_depart, 1.0) )
-	  | 'b' -> (set_color black; (point_depart, 1.0) )
-	  | '1' -> (thetaInit := !thetaInit + 10; (point_depart, 1.0) )
-	  | '2' -> (thetaInit := !thetaInit - 10; (point_depart, 1.0) )
-	  | 'a' -> (phiInit := !phiInit + 10 ; (point_depart, 1.0) )
-	  | 'z' -> (phiInit := !phiInit + 10; (point_depart, 1.0) )
-	  | '3' -> ({x=float_of_int(int_of_float (point_depart.x -. 10.) mod (size_x()));
-		     y=point_depart.y; z=point_depart.z},1.0)
-	  | '4' -> ({x=float_of_int(int_of_float (point_depart.x +. 10.) mod (size_x()));
-		     y=point_depart.y; z=point_depart.z},1.0)
-	  | '5' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y -. 10.) mod (size_y()));
-		     z=point_depart.z},1.0)
-	  | '6' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y +. 10.) mod (size_y()));
-		     z=point_depart.z},1.0)
-	  | '7' -> (point_depart,1.1)
-	  | '8' -> (point_depart,0.9)
-	  | _ -> (point_depart, 1.0)) in
-	  
-	  rec_draw k chaine rws interpretation new_point_depart echelle grow (scale_factor*.zoom) iter clear;
-	  ();
-	end)
+        (match event.key with
+        | 'q' -> raise Quit
+        | 's' ->
+          (*let img = get_image 0 0 (size_x ()) (size_y ())
+            in save_image img "pic.bmp"*)
+	  let c = open_out ("LSystem_sauvegarde"^(string_of_float( Unix.time()))^"svg") in 
+          begin 
+	    start_svg_file c;
+            rec_draw k chaine rws interpretation point_depart echelle grow (scale_factor*.zoom) iter clear (Flux(c)) current_color;
+	    finish_svg_file c;
+          end
+        | _ -> begin
+          let (new_point_depart, zoom, current_color) =
+            (match event.key with
+            | 'o' -> let (r,g,b) = (246,121,25) in (set_color (rgb r g b); (point_depart, 1.0, (r,g,b)))
+            | 'r' -> let (r,g,b) = (255,0,0) in (set_color (rgb r g b); (point_depart, 1.0, (r,g,b)))
+            | 'v' -> let (r,g,b) = (0,153,0) in (set_color (rgb r g b); (point_depart, 1.0, (r,g,b)))
+            | 'j' -> let (r,g,b) = (255, 255, 0) in (set_color (rgb r g b); (point_depart, 1.0, (r,g,b)))
+            | 'b' -> let (r,g,b) = (255, 255, 255) in (set_color (rgb r g b); (point_depart, 1.0, (r,g,b)))
+            | '1' -> (thetaInit := !thetaInit + 10; (point_depart, 1.0, current_color))
+            | '2' -> (thetaInit := !thetaInit - 10; (point_depart, 1.0, current_color))
+            | 'a' -> (phiInit := !phiInit + 10 ; (point_depart, 1.0, current_color))
+            | 'z' -> (phiInit := !phiInit + 10; (point_depart, 1.0, current_color))
+            | '3' -> ({x=float_of_int(int_of_float (point_depart.x -. 10.) mod (size_x()));
+                       y=point_depart.y; z=point_depart.z},1.0, current_color)
+            | '4' -> ({x=float_of_int(int_of_float (point_depart.x +. 10.) mod (size_x()));
+                       y=point_depart.y; z=point_depart.z},1.0, current_color)
+            | '5' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y -. 10.) mod (size_y()));
+                       z=point_depart.z}, 1.0, current_color)
+            | '6' -> ({x=point_depart.x; y=float_of_int(int_of_float(point_depart.y +. 10.) mod (size_y()));
+                       z=point_depart.z}, 1.0, current_color)
+            | '7' -> (point_depart, 1.1, current_color)
+            | '8' -> (point_depart, 0.9, current_color)
+            | _ -> (point_depart, 1.0, current_color)) in
+          begin
+            rec_draw k chaine rws interpretation new_point_depart echelle grow (scale_factor*.zoom) iter clear NA current_color;
+            ();
+	  end
+        end)
       else ()
     done
   with Quit -> close_graph()
     
 and
     
-    rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear =
+    rec_draw k chaine rws interpretation point_depart echelle grow scale_factor iter clear save current_color =
   let tmp = ( if grow then 1 else k ) in
   begin
     if clear then clear_graph() else ();
     let minmax_xy = { minx = 0.0 ; maxx = 0.0 ; miny = 0.0 ; maxy = 0.0 } in
-    let (_,_,_,_)= aux_draw chaine interpretation point_depart minmax_xy !thetaInit !phiInit ( scale_factor *. (echelle ** (float_of_int tmp))) false in ();
+    let (_,_,_,_)= aux_draw chaine interpretation point_depart minmax_xy !thetaInit !phiInit ( scale_factor *. (echelle ** (float_of_int tmp))) false save current_color in ();
     (* si il s'agit de la dernière itération *)
     if iter=(k+1) then begin
-      reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor iter clear (* appeler la réponse à l'utilisateur *)
+      reponse_utilisateur k chaine rws interpretation point_depart echelle grow scale_factor 1. iter clear current_color(* appeler la réponse à l'utilisateur *)
     end
     (* si ce n'est pas la dernière itération *)
     else
@@ -311,32 +371,33 @@ and
         let t = Unix.gettimeofday () +. 1.0 in
         while (Unix.gettimeofday () < t) do () done;
         rec_draw (k+1) (rewrite rws chaine) rws interpretation point_depart
-         echelle grow scale_factor iter clear;
+          echelle grow scale_factor iter clear save current_color;
       end
-end
+  end
 ;;
 
 
 let draw chaine rws interpretation iter grow clear =
+  let current_color = (0,0,0) in
   begin
    open_graph(" 600x600");
     clear_graph();
-    let echelle = check_echelle rws interpretation in
+    
+    let echelle = check_echelle rws interpretation NA current_color in
     let n_chaine = calc_n_chaine chaine rws iter in
-      if (taille n_chaine) > (size_x() * size_y() ) then failwith "trop gros!!" else
-        let (scale_factor, point_depart) =
-         check_adjustment (float_of_int (size_x ())) (float_of_int (size_y ()))
-         n_chaine interpretation (echelle ** (float_of_int (iter-1)))
-        in
-        begin
-         print_float scale_factor;
-         print_float point_depart.x;
-         let echelle = (if grow then (echelle ** (float_of_int (iter-1))) else echelle) in
-         rec_draw 0 chaine rws interpretation point_depart echelle grow scale_factor iter clear
-        end
+    if (taille n_chaine) > (size_x() * size_y() ) then failwith "trop gros!!" else
+      let (scale_factor, point_depart) =
+        check_adjustment (float_of_int (size_x ())) (float_of_int (size_y ()))
+          n_chaine interpretation (echelle ** (float_of_int (iter-1))) NA current_color
+      in
+      begin
+        print_float scale_factor;
+        print_float point_depart.x;
+        let echelle = (if grow then (echelle ** (float_of_int (iter-1))) else echelle) in
+        rec_draw 0 chaine rws interpretation point_depart echelle grow scale_factor iter clear NA current_color
+      end
   end
 ;;
-
 
 (* Les exemples *)
 
@@ -367,7 +428,7 @@ let w_koch = Seq [S A;S B;S A;S B;S A;S B;S A]
 and s_koch =
   [A,
    Seq ([S A;S C;S A;S A;S B;S A;S A;S B;S A;S B;S A;S C;S A;S C;S A] @
-	   [S A;S B;S A;S B;S A;S C;S A;S C;S A;S A;S C;S A;S A;S B;S A])]
+         [S A;S B;S A;S B;S A;S C;S A;S C;S A;S A;S C;S A;S A;S B;S A])]
 and i_koch =
   [(A,[Line(10)]); (B,[Turn(90)]); (C,[Turn(-90)]); (D,[Move(10)])];;
 
@@ -376,8 +437,8 @@ let w_koch1 = Seq [S A;S C;S A;S C;S A;S C;S A]
 and s_koch1 =
   [A,
    Seq ([S A;S C;S D;S B;S A;S A;S C;S A;S C;S A;S A;S C;S A;S D;S C;S A;S A] @
-	   [S B;S D;S C;S A;S A;S B;S A;S B;S A;S A;S B;S A;S D;S B;S A;S A] @
-	   [S A]);
+         [S B;S D;S C;S A;S A;S B;S A;S B;S A;S A;S B;S A;S D;S B;S A;S A] @
+         [S A]);
    D,
    Seq [S D;S D;S D;S D;S D;S D]];;
 
@@ -450,21 +511,21 @@ and s_plant = [
   (X, Seq [S F; S M; Branch [Branch [S X]; S P; S X]; S P; S F; Branch[S P; S F; S X]; S M; S X]);
   (F, Seq[S F; S F])
 ]
-and i_plant = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]); (X, [])];; 
+and i_plant = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]); (X, [])];;
 
 (* Plant 3D *)
 let w_plant3d = S X
 and s_plant3d = [
   (X, Seq [S F; S M; S N; Branch [Branch [S X]; S P; S Q; S X];
-	   S P; S Q; S F; Branch[S P; S Q; S F; S X]; S M; S N; S X]);
+         S P; S Q; S F; Branch[S P; S Q; S F; S X]; S M; S N; S X]);
   (F, Seq[S F; S F])
 ]
 and i_plant3d = [(F,[Line(5)]);(P,[Turn(25)]);(M,[Turn(-25)]);
-		 (Q,[TurnPhi(+25)]); (N,[TurnPhi(-25)]); (X, [])];; 
+                 (Q,[TurnPhi(+25)]); (N,[TurnPhi(-25)]); (X, [])];;
 
 let exemples = [
-  "snow",  (w_snow, s_snow, i_snow) ;
-  "koch",  (w_koch, s_koch, i_koch) ;
+  "snow", (w_snow, s_snow, i_snow) ;
+  "koch", (w_koch, s_koch, i_koch) ;
   "koch1", (w_koch1, s_koch1, i_koch) ;
   "koch2", (w_koch, s_koch2, i_koch) ;
   "koch3", (w_koch, s_koch3, i_koch) ;
@@ -476,15 +537,16 @@ let exemples = [
   "4gosp", (w_4gosp, s_4gosp, i_4gosp);
   "plant", (w_plant, s_plant, i_plant);
   "plant3d", (w_plant3d, s_plant3d, i_plant3d);
-  "br1",   (w_br1,s_br1,i_br1);
-  "br2",   (w_br2,s_br2,i_br2)
+  "br1", (w_br1,s_br1,i_br1);
+  "br2", (w_br2,s_br2,i_br2);
+  "cantor", (w_cantor, s_cantor, i_cantor);
 ]
 ;;
 
 
 
 try
-  let (chaine, rws, commands) =  List.assoc !exemple exemples
+  let (chaine, rws, commands) = List.assoc !exemple exemples
   in draw chaine rws commands !n !grow !clear
 with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
 
@@ -499,3 +561,7 @@ with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
 - utilisateur choisit l'exemple
 
 *)
+
+
+
+

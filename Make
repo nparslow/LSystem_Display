@@ -1,0 +1,6 @@
+ocamlc -c defs.ml
+ocamlc -c substitutions.ml
+ocamlc -c exemples.ml
+ocamlc -c interpretation.ml
+ocamlc -c main.ml
+ocamlc -o l_systems graphics.cma unix.cma defs.cmo substitutions.cmo exemples.cmo interpretation.cmo main.cmo

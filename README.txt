@@ -1,9 +1,8 @@
+Bienvenue à "LSystem_Display"
 
-Bienvenue a "LSystem_Display"
-
-ce logiciel sert a montrer les Lindenmayer Systemes graphiquement.
+Ce logiciel sert à montrer les Systèmes de Lindenmayer graphiquement.
 Voir http://www.pps.univ-paris-diderot.fr/~treinen/teaching/pf5/project/projet.pdf
-pour plus de details sur les Lindenmayer Systems
+pour plus de détails sur les Lindenmayer Systems
 
 Compilation:
 ./Makefile
@@ -31,7 +30,7 @@ options command line:
 Exemples possible :
 snow, koch1, koch2, koch3, koch4, koch5, dragon, sierp, 6gosp, 4gosp, plant, plant3d, br1, br2, cantor
 
-options graphiques (a utiliser pendant qu'un image est visible):
+options graphiques (à utiliser suite à la dernière itération du graphisme):
 
 changer la couleur du graphisme :
 ‘o’ -> orange
@@ -57,11 +56,11 @@ faire un zoom :
 
 
 
-Pour creer votre propre L-Systems:
+Pour créer votre propre L-Système:
 
-actuellement il faut modifier le code, donce c'est fortement deconseille.
-Un moyen de creer un L-Systeme a partir d'un fichier txt est en train
-de developement.
+actuellement il faut modifier le code, donce c'est fortement déconseillé.
+Un moyen de créer un L-Système à partir d'un fichier .txt est en cours
+de développement.
 
 
 

@@ -1,6 +1,6 @@
 /* File parser.mly */
         %token <int> INT
-	%token SS
+        %token S
 	%token LINE
 	%token TURNPHI
 	%token TURN
@@ -24,14 +24,14 @@
             chaine EOL remplacements EOL instructions EOF  { ($1,$3,$5) }
         ;
         chaine:
-          SS idsymbol                          { S $2 }
-          | BRANCH LSQBRACKET list_chaine     { Branch $3 }
-          | SEQUENCE LSQBRACKET list_chaine   { Seq $3 }
+           S idsymbol                            { print_string ("chS "^$1); S $1 }
+          | BRANCH LSQBRACKET list_chaine     { print_string ("chB "^$3);Branch $3 }
+          | SEQUENCE LSQBRACKET list_chaine   { print_string ("chSe "^$3);Seq $3 }
         ;
         idsymbol:
           SYMBOL                              { match $1 with
-	                                         | 'A' -> A
-	                                         | 'B' -> B
+	                                         | 'A' -> print_string ("ids "^$1);A
+	                                         | 'B' -> print_string ("ids "^$1);B
 	                                         | 'C' -> C
 	                                         | 'D' -> D
 	                                         | 'E' -> E
@@ -58,7 +58,7 @@
 	                                         | c -> raise (Failure ("symbol inconnue " ^ Char.escaped c))  }
         ;
         list_chaine:
-          chaine SEMICOLON list_chaine    { $1 :: $3 }
+          chaine SEMICOLON list_chaine    { print_string$1 :: $3 }
           | chaine RSQBRACKET               { [$1] }
           | RSQBRACKET                      { [] }
 	remplacements:

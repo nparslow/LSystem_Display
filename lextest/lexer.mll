@@ -1,8 +1,5 @@
 (* File lexer.mll *)
         {
-
-	(* Définition de types *)
-	open typage;;
         open Parser        (* The type token is defined in parser.mli *)
         exception Eof
         }
@@ -10,14 +7,14 @@
             [' ' '\t']     { token lexbuf }     (* skip blanks *)
           | ['\n' ]        { EOL }
           | ['0'-'9']+ as lxm { INT(int_of_string lxm) }
-	  | 'S'               { S }
+	  | 'S'               { SS }
           | "Line"            { LINE }
           | "TurnPhi"         { TURNPHI }
           | "Turn"            { TURN }
           | "MoveNoScale"     { MOVENOSCALE }
 	  | "Move"            { MOVE }
           | "Rectangle"       { RECTANGLE }
-          | ['A'-'Z'] as lxm  { SYMBOL of lxm} 
+          | ['A'-'R''T'-'Z'] as lxm  { SYMBOL(lxm)} 
 	  | '{'            { LBRACE }
 	  | '}'            { RBRACE }
           | '['            { LSQBRACKET }
@@ -26,5 +23,5 @@
           | ')'            { RPAREN }
           | ','            { COMMA }
 	  | ';'            { SEMICOLON }
-          | eof            { raise Eof }
+          | eof            { EOF }
 

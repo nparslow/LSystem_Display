@@ -17,6 +17,7 @@ type symbol = A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q 
 type interpretation = (symbol * turtle_command list) list;;
 type token =
   | INT of (int)
+  | SS
   | LINE
   | TURNPHI
   | TURN

@@ -587,7 +587,8 @@ with Not_found ->
   try
     (* lire des informations a partir d'un fichier *)
     begin
-      print_string "test";
+      print_string "Malheureusement le parser ne fonctionne pas encore,\n";
+      print_string "S'il vous plait utiliser un des exemples \n";
       let lexbuf = Lexing.from_channel (open_in !exemple) 
       in let (chaine, rws, commands) = Parser.main Lexer.token lexbuf
 	 in draw chaine rws commands !n !grow !clear

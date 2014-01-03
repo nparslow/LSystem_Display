@@ -5,7 +5,10 @@
 #load "graphics.cma"
 #load "unix.cma";;*)
 
-(* ocamlfind ocamlc -package camlimages.all_formats -package graphics -package camlimages.graphics unix.cma -linkpkg projet_v049c.ml *)
+(* ocamlfind ocamlc -I ./lextest/ parser.cmo lexer.cmo -package camlimages.all_formats -package graphics -package camlimages.graphics unix.cma -linkpkg project_v05.ml  *)
+
+open Parser;;
+open Lexer;;
 
 open Arg;;
 open Images;;
@@ -24,7 +27,7 @@ let opt_spec = [
   ("-n", Set_int n, "Le nombre d'itérations à faire. 1 correspond à la séquence initiale");
   ("-grow", Unit (function () -> grow := not !grow), "Agrandit avec chaque itération. \nPar défaut -grow n'est pas applicable");
   ("-no_clear", Unit (function () -> clear := not !clear), " Ne pas effacer le graphisme après chaque itération. \nPar défaut no_clear n'est pas applicable");
-  ("-exemple", Set_string exemple, "L'exemple. Voir option -e pour voir la liste d'exemples")
+  ("-exemple", Set_string exemple, "L'exemple, ou le fichier d'un exemple. Voir option -e pour voir la liste d'exemples")
 ];;
 
 let arg_action = (function s -> arguments:= !arguments @ [s]);;
@@ -49,8 +52,10 @@ end
 let thetaInit = ref 0;;
 let phiInit = ref 90;;
 
+(*
 (* Définition de types *)
-type symbol = A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z;;
+(* sans 'S' pour eviter un conflit dans le parser *)
+type symbol =  A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | T | U | V | W | X | Y | Z;;
 
 type bracketed = S of symbol
                  | Seq of bracketed list
@@ -66,6 +71,7 @@ type turtle_command= Move of int
 type rewriting_system = (symbol * bracketed) list;;
 
 type interpretation = (symbol * turtle_command list) list;;
+*)
 
 type flux = NA | Flux of out_channel;; (* Pour la sauvegarde, Flux quand on veut sauvegarder, NA sinon *)
 
@@ -196,8 +202,8 @@ let rec execute point theta phi minmax_xy scale_factor instructions check save c
 
     | TurnPhi (deg) ->
       (* Calculer le nouvel angle phi et exécuter la commande *)
-      let newphi = 180 - abs (((phi + deg) mod 360) - 180) in
-      (* on veut: 0 < phi < 180 et phi = 181 -> phi = 179 *)
+      let newphi = (phi + deg) mod 360 in (* 180 - abs (((phi + deg) mod 360) - 180) in
+      (* on veut: 0 < phi < 180 et phi = 181 -> phi = 179 *) *)
       execute point theta newphi minmax_xy scale_factor instructions' check save current_color
 	
     | Rectangle(largeur, hauteur) ->
@@ -348,8 +354,8 @@ let rec reponse_utilisateur k chaine rws interpretation point_depart echelle gro
             | '1' -> (thetaInit := !thetaInit + 10; (point_depart, 1.0, current_color))
             | '2' -> (thetaInit := !thetaInit - 10; (point_depart, 1.0, current_color))
 	    (* Modifier l'angle phi (3d) *)
-            | 'a' -> (phiInit := !phiInit + 10 ; (point_depart, 1.0, current_color))
-            | 'z' -> (phiInit := !phiInit + 10; (point_depart, 1.0, current_color))
+            | 'a' -> (phiInit := !phiInit - 10 ; (point_depart, 1.0, current_color))
+            | 'z' -> (phiInit := !phiInit + 10 ; (point_depart, 1.0, current_color))
 	    (* Déplacer le graphisme vers la gauche (3) et vers la droite (4) *)
             | '3' -> ({x=float_of_int(int_of_float (point_depart.x -. 10.) mod (size_x()));
                        y=point_depart.y; z=point_depart.z},1.0, current_color)
@@ -577,7 +583,16 @@ let exemples = [
 try
   let (chaine, rws, commands) = List.assoc !exemple exemples
   in draw chaine rws commands !n !grow !clear
-with Not_found -> print_string ("l'exemple "^(!exemple)^" n'existe pas");;
+with Not_found -> 
+  try
+    (* lire des informations a partir d'un fichier *)
+    begin
+      print_string "test";
+      let lexbuf = Lexing.from_channel (open_in !exemple) 
+      in let (chaine, rws, commands) = Parser.main Lexer.token lexbuf
+	 in draw chaine rws commands !n !grow !clear
+    end
+  with e -> print_string ("l'exemple "^(!exemple)^" n'existe pas \n");;
 
 
 (* A FAIRE :

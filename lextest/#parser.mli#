@@ -1,0 +1,37 @@
+type symbol = A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z;;
+
+type bracketed = S of symbol
+                 | Seq of bracketed list
+                 | Branch of bracketed list;;
+
+type turtle_command= Move of int
+                 | Line of int
+                 | Turn of int
+                 | TurnPhi of int (* tourner par rapport à l'axe des z *)
+                 | Rectangle of int * int
+                 | MoveNoScale of int;; (* un déplacement qui n'est pas influencé par l'échelle du dessin - notamment pour Cantor*)
+
+type rewriting_system = (symbol * bracketed) list;;
+
+type token =
+  | INT of (int)
+  | LINE
+  | TURNPHI
+  | TURN
+  | MOVENOSCALE
+  | MOVE
+  | RECTANGLE
+  | SYMBOL
+  | LBRACE
+  | RBRACE
+  | LSQBRACKET
+  | RSQBRACKET
+  | LPAREN
+  | RPAREN
+  | COMMA
+  | SEMICOLON
+  | EOL
+  | EOF
+
+val main :
+  (Lexing.lexbuf  -> token) -> Lexing.lexbuf -> bracketed * rewriting_system * turtle_command

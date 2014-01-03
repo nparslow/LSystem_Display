@@ -1,0 +1,6 @@
+name="lextest"
+description="outils pour lexer et parser LSystems"
+version="0.1"
+depends=""
+archive(byte)="lexer.cmo,parser.cmo"
+

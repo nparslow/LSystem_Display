@@ -31,7 +31,38 @@ options command line:
 Exemples possible :
 snow, koch1, koch2, koch3, koch4, koch5, dragon, sierp, 6gosp, 4gosp, plant, plant3d, br1, br2, cantor
 
-options graphiques:
+options graphiques (a utiliser pendant qu'un image est visible):
+
+changer la couleur du graphisme :
+‘o’ -> orange
+‘n’ -> noir
+‘b’ -> bleu
+‘r’ -> rouge
+‘v’ -> vert
+‘j’ -> jaune
+modifier l’angle (théta) du dessin (en 2D) :
+‘1’ -> contre le sens des aiguilles d’une montre
+‘2’ -> dans le sens des aiguilles d’une montre
+modifier l’angle (phi) du dessin (en 3D) :
+‘a’ -> rotation autour de l'axe x contre le sens des aiguilles d'une montre
+‘b’ -> rotation autour de l'axe x dans le sens des aiguilles d'une montre
+déplacer le graphisme :
+‘3’ -> vers la gauche
+‘4’ -> vers la droite
+‘5’ -> vers le haut
+‘6’ -> vers le bas
+faire un zoom :
+‘7’ -> zoom in
+‘8’ -> zoom out
+
+
+
+Pour creer votre propre L-Systems:
+
+actuellement il faut modifier le code, donce c'est fortement deconseille.
+Un moyen de creer un L-Systeme a partir d'un fichier txt est en train
+de developement.
+
 
 
 

@@ -63,5 +63,14 @@ Un moyen de créer un L-Système à partir d'un fichier .txt est en cours
 de développement.
 
 
+Example usages:
+./l_systems -exemple dragon -n 15 -grow
+./l_systems -exemple snow -n 6
+for a 3d example
+./l_systems -exemple plant3d -n 6
+
+
+
+
 
 
